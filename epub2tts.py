@@ -281,12 +281,22 @@ class EpubToAudiobook:
             print("Engine is TTS, model is " + model_name)
             self.tts = TTS(model_name).to(self.device)
 
+        output_folder = "./outputs"
+        if not os.path.isdir(output_folder):
+            print('Making ouptut folder: ' + self.output_folder)
+            os.mkdir(output_folder)
         files = []
         position = 0
         start_time = time.time()
+        output_folder_name = output_folder + "/" + self.bookname
+        if os.path.isdir(output_folder_name):
+            print("Directory already exists, skipping to next step")
+        else:
+            print('Making directory ' + self.bookname)
+            os.mkdir(output_folder_name)
         print("Reading from " + str(self.start + 1) + " to " + str(self.end))
         for i in range(self.start, self.end):
-            outputflac = self.bookname + "-" + str(i+1) + ".flac"
+            outputflac = output_folder_name + "/" + self.bookname + "-" + str(i+1) + ".flac"
             if os.path.isfile(outputflac):
                 print(outputflac + " exists, skipping to next chapter")
             else:
@@ -295,7 +305,7 @@ class EpubToAudiobook:
                 sentence_groups = list(self.combine_sentences(sentences))
                 for x in tqdm(range(len(sentence_groups))):
                     retries = 1
-                    tempwav = "temp" + str(x) + ".wav"
+                    tempwav = output_folder_name "/temp" + str(x) + ".wav"
                     tempflac = tempwav.replace("wav", "flac")
                     if os.path.isfile(tempflac):
                         print(tempflac + " exists, skipping to next chunk")
@@ -377,10 +387,10 @@ class EpubToAudiobook:
         self.generate_metadata(files, title, author)
         ffmpeg_command = ["ffmpeg","-i",outputm4a,"-i",self.ffmetadatafile,"-map_metadata","1","-codec","copy",self.output_filename]
         subprocess.run(ffmpeg_command)
-        os.remove(self.ffmetadatafile)
-        os.remove(outputm4a)
+        os.remove(output_folder_name + "/" + self.ffmetadatafile)
+        os.remove(output_folder_name + "/" + outputm4a)
         for f in files:
-            os.remove(f)
+            os.remove(output_folder_name+"/"+f)
         print(self.output_filename + " complete")
 
 def main():

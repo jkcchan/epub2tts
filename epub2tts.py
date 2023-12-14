@@ -390,7 +390,7 @@ class EpubToAudiobook:
         os.remove(output_folder_name + "/" + self.ffmetadatafile)
         os.remove(output_folder_name + "/" + outputm4a)
         for f in files:
-            os.remove(output_folder_name+"/"+f)
+            os.remove(f)
         print(self.output_filename + " complete")
 
 def main():

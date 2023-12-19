@@ -42,7 +42,6 @@ class EpubToAudiobook:
         self.engine = engine
         self.minratio = minratio
         self.debug = debug
-        self.output_filename = self.bookname + ".m4b"
         self.chapters = []
         self.chapters_to_read = []
         if source.endswith('.epub'):
@@ -67,6 +66,17 @@ class EpubToAudiobook:
         #Make sure we've got nltk punkt
         self.ensure_punkt()
 
+        self.output_folder = "./outputs"
+        if not os.path.isdir(self.output_folder):
+            print('Making ouptut folder: ' + self.output_folder)
+            os.mkdir(self.output_folder)
+
+        self.output_folder_name = self.output_folder + "/" + self.bookname
+
+        if not os.path.isdir(self.output_folder_name):
+            print('Making directory ' + self.bookname)
+            os.mkdir(self.output_folder_name)
+        self.output_filename = self.output_folder_name + "/" + self.bookname + ".m4b"
 
     def ensure_punkt(self):
         try:
@@ -79,7 +89,7 @@ class EpubToAudiobook:
     def generate_metadata(self, files, title, author):
         chap = 1
         start_time = 0
-        with open(self.ffmetadatafile, "w") as file:
+        with open(self.output_folder_name + "/" + self.ffmetadatafile, "w") as file:
             file.write(";FFMETADATA1\n")
             file.write("ARTIST=" + str(author) + "\n")
             file.write("ALBUM=" + str(title) + "\n")
@@ -281,22 +291,12 @@ class EpubToAudiobook:
             print("Engine is TTS, model is " + model_name)
             self.tts = TTS(model_name).to(self.device)
 
-        output_folder = "./outputs"
-        if not os.path.isdir(output_folder):
-            print('Making ouptut folder: ' + self.output_folder)
-            os.mkdir(output_folder)
         files = []
         position = 0
         start_time = time.time()
-        output_folder_name = output_folder + "/" + self.bookname
-        if os.path.isdir(output_folder_name):
-            print("Directory already exists, skipping to next step")
-        else:
-            print('Making directory ' + self.bookname)
-            os.mkdir(output_folder_name)
         print("Reading from " + str(self.start + 1) + " to " + str(self.end))
         for i in range(self.start, self.end):
-            outputflac = output_folder_name + "/" + self.bookname + "-" + str(i+1) + ".flac"
+            outputflac = self.output_folder_name + "/" + self.bookname + "-" + str(i+1) + ".flac"
             if os.path.isfile(outputflac):
                 print(outputflac + " exists, skipping to next chapter")
             else:
@@ -305,7 +305,7 @@ class EpubToAudiobook:
                 sentence_groups = list(self.combine_sentences(sentences))
                 for x in tqdm(range(len(sentence_groups))):
                     retries = 1
-                    tempwav = output_folder_name "/temp" + str(x) + ".wav"
+                    tempwav = self.output_folder_name + "/temp" + str(x) + ".wav"
                     tempflac = tempwav.replace("wav", "flac")
                     if os.path.isfile(tempflac):
                         print(tempflac + " exists, skipping to next chunk")
@@ -322,9 +322,11 @@ class EpubToAudiobook:
                                         #assume we're using a multi-speaker model
                                         print(sentence_groups[x]) if self.debug else None
                                         self.tts.tts_to_file(text = sentence_groups[x], speaker = speaker, file_path = tempwav)
+                                        print('hi')
                                     else:
                                         print(sentence_groups[x]) if self.debug else None
                                         self.tts.tts_to_file(text = sentence_groups[x], file_path = tempwav)
+                                        print('hi2')
                                 ratio = self.compare(sentence_groups[x], tempwav)
                                 if ratio < self.minratio:
                                     raise Exception("Spoken text did not sound right - " +str(ratio))
@@ -333,7 +335,7 @@ class EpubToAudiobook:
                                 retries -= 1
                                 print(f"Error: {str(e)} ... Retrying ({retries} retries left)")
                         if retries == 0:
-                            print("Something is wrong with the audio (" + str(ratio) + "): " + tempwav)
+                            print("Something is wrong with the audio: " + tempwav)
                             #sys.exit()
                         temp = AudioSegment.from_wav(tempwav)
                         temp.export(tempflac, format="flac")
@@ -379,16 +381,20 @@ class EpubToAudiobook:
         outputm4a = self.output_filename.replace("m4b", "m4a")
         concatenated.export(outputm4a, format="ipod", bitrate=bitrate)
         if self.sourcetype == 'epub':
-            author = self.book.get_metadata('DC', 'creator')[0][0]
-            title = self.book.get_metadata('DC', 'title')[0][0]
+            try:
+                author = self.book.get_metadata('DC', 'creator')[0][0]
+                title = self.book.get_metadata('DC', 'title')[0][0]
+            except:
+                author = "Unknown"
+                title = self.bookname
         else:
             author = "Unknown"
             title = self.bookname
         self.generate_metadata(files, title, author)
-        ffmpeg_command = ["ffmpeg","-i",outputm4a,"-i",self.ffmetadatafile,"-map_metadata","1","-codec","copy",self.output_filename]
+        ffmpeg_command = ["ffmpeg","-i",outputm4a,"-i",self.output_folder_name + "/" + self.ffmetadatafile,"-map_metadata","1","-codec","copy",self.output_filename]
         subprocess.run(ffmpeg_command)
-        os.remove(output_folder_name + "/" + self.ffmetadatafile)
-        os.remove(output_folder_name + "/" + outputm4a)
+        os.remove(self.output_folder_name + "/" + self.ffmetadatafile)
+        os.remove(outputm4a)
         for f in files:
             os.remove(f)
         print(self.output_filename + " complete")
